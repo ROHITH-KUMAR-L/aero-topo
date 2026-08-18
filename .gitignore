@@ -44,3 +44,4 @@ venv.bak/
 # Project specific
 weights/
 *.log
+project.txt
