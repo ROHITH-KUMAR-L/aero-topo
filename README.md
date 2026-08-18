@@ -243,6 +243,31 @@ Open your browser at `http://localhost:8000` to access the live **Aero-Topo 3D D
 
 ---
 
+### Docker Deployment
+
+Alternatively, you can run the entire system inside a container using Docker or Docker Compose:
+
+#### Option A: Docker Compose (Recommended)
+```bash
+docker-compose up --build -d
+```
+
+#### Option B: Standalone Docker Container
+```bash
+# Build the Docker image
+docker build -t aero-topo:latest .
+
+# Run the container with mounted weights volume
+docker run -d \
+  -p 8000:8000 \
+  -v "$(pwd)/weights:/app/weights" \
+  --name aero-topo-engine \
+  aero-topo:latest
+```
+
+---
+
+
 ## API Reference
 
 ### `GET /api/health`
