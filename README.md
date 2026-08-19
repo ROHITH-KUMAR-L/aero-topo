@@ -321,7 +321,3 @@ Uploads a thermal image and returns Base64 encoded outputs for 3D visualization.
 ## License
 
 Distributed under the MIT License. See `LICENSE` for more details.
-
-<div align="center">
-  <sub>Built by ROHITH KUMAR L for Advanced Aerial Reconnaissance & Topographical Intelligence.</sub>
-</div>
