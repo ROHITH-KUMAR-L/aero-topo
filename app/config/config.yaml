@@ -1,0 +1,44 @@
+# Aero-Topo System Configuration
+
+server:
+  host: "127.0.0.1"
+  port: 8000
+  cors_origins: ["*"]
+
+models:
+  fusion:
+    name: "FF-Fusion"
+    device: "cuda"  # fallback to cpu if cuda unavailable
+    fp16: true
+    checkpoint_url: "https://github.com/FF-Fusion/FF-Fusion-weights/releases/download/v1.0/ff_fusion_student.pth"
+    local_path: "models/ff_fusion_student.pth"
+  
+  depth:
+    name: "Depth-Anything-V2-Small"
+    encoder: "vits"  # vits (small, 24.8M), vitb (base), vitl (large)
+    mode: "relative" # relative or metric
+    hf_repo: "depth-anything/Depth-Anything-V2-Small-hf"
+    local_path: "models/depth_anything_v2_vits.pth"
+    device: "cuda"
+    fp16: true
+
+  robofirefusenet:
+    enabled: false
+    local_path: "models/robofirefusenet.pth"
+
+generative:
+  enabled: false
+  provider: "openai"
+  model: "gpt-image-2"
+  prompt: "Create a realistic visible-spectrum interpretation of this thermal image. Preserve the exact camera viewpoint, scene geometry, terrain layout, vegetation boundaries, fire locations, and relative spatial arrangement visible in the source thermal image. Do not invent objects, remove terrain, move fire locations, or alter the camera perspective. Produce a realistic RGB-style scene interpretation."
+
+camera:
+  fx: null
+  fy: null
+  cx: null
+  cy: null
+
+storage:
+  results_dir: "results"
+  models_dir: "models"
+  data_dir: "data"

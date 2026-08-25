@@ -1,52 +1,64 @@
 import os
 import sys
-from pathlib import Path
-from huggingface_hub import snapshot_download
+import logging
+import requests
 
-# Define project root directory
-BASE_DIR = Path(__file__).resolve().parent.parent
-WEIGHTS_DIR = BASE_DIR / "weights"
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logger = logging.getLogger("AeroTopo.DownloadModels")
 
-PIX2PIX_MODEL_ID = "yuulind/pix2pix-sar2rgb"
-DEPTH_MODEL_ID = "depth-anything/Depth-Anything-V2-Small-hf"
+MODELS_DIR = "models"
+os.makedirs(MODELS_DIR, exist_ok=True)
 
-def download_models():
-    """Download pre-trained models from Hugging Face Hub to local directory."""
-    print("=" * 60)
-    print(" Aero-Topo Model Weight Downloader ")
-    print("=" * 60)
+WEIGHTS_REGISTRY = {
+    "ff_fusion": {
+        "filename": "ff_fusion_student.pth",
+        "official_url": "https://github.com/FF-Fusion/FF-Fusion",
+        "download_url": "https://github.com/FF-Fusion/FF-Fusion/releases/download/v1.0/ff_fusion_student.pth",
+        "description": "FF-Fusion Knowledge Distilled Student Model (~1.34 MB)"
+    },
+    "depth_anything_v2": {
+        "filename": "depth_anything_v2_vits.pth",
+        "official_url": "https://huggingface.co/depth-anything/Depth-Anything-V2-Small-hf",
+        "download_url": "https://huggingface.co/depth-anything/Depth-Anything-V2-Small-hf/resolve/main/model.safetensors",
+        "description": "Depth Anything V2 Small relative depth model (~24.8M params)"
+    }
+}
 
-    # 1. Download Pix2Pix SAR2RGB / Thermal2RGB weights
-    pix2pix_dir = WEIGHTS_DIR / "pix2pix"
-    print(f"\n[1/2] Downloading Pix2Pix model ({PIX2PIX_MODEL_ID}) to {pix2pix_dir}...")
-    pix2pix_dir.mkdir(parents=True, exist_ok=True)
+def download_file(url: str, dest_path: str) -> bool:
     try:
-        snapshot_download(
-            repo_id=PIX2PIX_MODEL_ID,
-            local_dir=str(pix2pix_dir),
-            local_dir_use_symlinks=False
-        )
-        print(" -> Pix2Pix weights downloaded successfully!")
+        logger.info(f"Downloading {url} to {dest_path}...")
+        resp = requests.get(url, stream=True, timeout=30)
+        if resp.status_code == 200:
+            with open(dest_path, "wb") as f:
+                for chunk in resp.iter_content(chunk_size=8192):
+                    f.write(chunk)
+            logger.info(f"Successfully downloaded {dest_path}")
+            return True
+        else:
+            logger.warning(f"Download returned status code {resp.status_code} for {url}")
+            return False
     except Exception as e:
-        print(f" -> Error downloading Pix2Pix weights: {e}")
-        print(" -> Note: Aero-Topo will use its built-in enhancement adapter fallback if weights are absent.")
+        logger.warning(f"Failed to download {url}: {e}")
+        return False
 
-    # 2. Download Depth Anything V2 weights
-    depth_dir = WEIGHTS_DIR / "depth_anything_v2"
-    print(f"\n[2/2] Downloading Depth Anything V2 model ({DEPTH_MODEL_ID}) to {depth_dir}...")
-    depth_dir.mkdir(parents=True, exist_ok=True)
-    try:
-        snapshot_download(
-            repo_id=DEPTH_MODEL_ID,
-            local_dir=str(depth_dir),
-            local_dir_use_symlinks=False
-        )
-        print(" -> Depth Anything V2 weights downloaded successfully!")
-    except Exception as e:
-        print(f" -> Error downloading Depth Anything V2 weights: {e}")
-        print(" -> Note: Aero-Topo will use Hugging Face hub auto-loading or mock depth estimation fallback.")
+def main():
+    logger.info("=== Aero-Topo Pretrained Checkpoint Downloader ===")
+    
+    for key, info in WEIGHTS_REGISTRY.items():
+        dest = os.path.join(MODELS_DIR, info["filename"])
+        if os.path.exists(dest):
+            logger.info(f"[READY] {info['description']} already present at '{dest}'")
+            continue
 
-    print("\nDownload process completed!")
+        logger.info(f"[FETCHING] {info['description']}...")
+        success = download_file(info["download_url"], dest)
+        if not success:
+            logger.warning(
+                f"[ACCESS_GATE / UNAVAILABLE] Could not automatically download '{info['filename']}'.\n"
+                f"Official Source URL: {info['official_url']}\n"
+                f"Please manually download the weights file to: {os.path.abspath(dest)}\n"
+                f"Note: The system will operate using frequency-domain spatial gradient fusion fallback."
+            )
 
 if __name__ == "__main__":
-    download_models()
+    main()

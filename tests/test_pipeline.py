@@ -1,53 +1,80 @@
-import unittest
+import os
+try:
+    import pytest
+except ImportError:
+    pytest = None
+
 import numpy as np
+import cv2
+from app.preprocessing.alignment import align_image_pair, compute_smoke_confidence
+from app.geometry.camera import CameraIntrinsics
+from app.geometry.depth_to_pointcloud import depth_to_pointcloud
+from app.geometry.depth_to_mesh import depth_to_mesh
+from app.models.depth_anything import DepthAnythingV2Model
+from app.models.ff_fusion import FFFusionModel
 
-class TestAeroTopoPipeline(unittest.TestCase):
+def test_alignment():
+    rgb = np.zeros((400, 600, 3), dtype=np.uint8)
+    thermal_3ch = np.zeros((300, 500, 3), dtype=np.uint8)
+    raw_thermal = np.zeros((300, 500), dtype=np.float32)
 
-    def test_preprocessing_resize(self):
-        from utils.preprocessing import resize_and_normalize
-        dummy_img = np.ones((100, 100, 3), dtype=np.uint8) * 128
-        resized = resize_and_normalize(dummy_img, target_size=(256, 256))
-        self.assertEqual(resized.shape, (256, 256, 3))
-        self.assertEqual(resized.dtype, np.uint8)
+    rgb_a, th_a, raw_a, info = align_image_pair(rgb, thermal_3ch, raw_thermal, target_size=(640, 512))
 
-    def test_base64_encoding(self):
-        from utils.preprocessing import numpy_to_base64_data_url
-        dummy_img = np.zeros((64, 64, 3), dtype=np.uint8)
-        b64_url = numpy_to_base64_data_url(dummy_img)
-        self.assertTrue(b64_url.startswith("data:image/png;base64,"))
+    assert rgb_a.shape == (512, 640, 3)
+    assert th_a.shape == (512, 640, 3)
+    assert raw_a.shape == (512, 640)
+    assert info["mismatch_detected"] is True
 
-    def test_canny_failsafe(self):
-        from pipeline.failsafe import run_canny_failsafe
-        dummy_thermal = np.random.randint(0, 255, (256, 256, 3), dtype=np.uint8)
-        edges = run_canny_failsafe(dummy_thermal)
-        self.assertEqual(edges.shape, (256, 256, 3))
-        self.assertEqual(edges.dtype, np.uint8)
+def test_smoke_confidence_qualitative():
+    smoke_img = np.full((100, 100, 3), 180, dtype=np.uint8)
+    info = compute_smoke_confidence(smoke_img)
 
-    def test_projection_math(self):
-        from utils.projection import project_depth_to_3d_points
-        dummy_zmap = np.ones((256, 256), dtype=np.float32) * 50.0
-        pts = project_depth_to_3d_points(dummy_zmap, subsample_stride=4)
-        self.assertIn("x", pts)
-        self.assertIn("y", pts)
-        self.assertIn("z", pts)
-        self.assertEqual(pts["x"].shape, (64, 64))
-        self.assertEqual(pts["z"].shape, (64, 64))
+    assert info["estimate_type"] == "Heuristic"
+    assert info["smoke_level"] in ["Low", "Medium", "High"]
+    assert info["visibility_level"] in ["Low", "Medium", "High"]
 
-    def test_cgan_fallback(self):
-        from models.cgan import ThermalToRGBEngine
-        engine = ThermalToRGBEngine()
-        dummy_thermal = np.ones((256, 256, 3), dtype=np.uint8) * 100
-        translated = engine.translate(dummy_thermal)
-        self.assertEqual(translated.shape, (256, 256, 3))
-        self.assertEqual(translated.dtype, np.uint8)
+def test_camera_intrinsics_calibration_state():
+    # Approximate camera intrinsics
+    cam_approx = CameraIntrinsics(image_width=640, image_height=512)
+    assert cam_approx.calibration_state == "Approximate"
+    assert cam_approx.to_dict()["calibration_state"] == "Approximate"
 
-    def test_depth_fallback(self):
-        from models.depth_engine import DepthEstimationEngine
-        engine = DepthEstimationEngine()
-        dummy_rgb = np.ones((256, 256, 3), dtype=np.uint8) * 150
-        depth_map = engine.estimate_depth(dummy_rgb)
-        self.assertEqual(depth_map.shape, (256, 256))
-        self.assertEqual(depth_map.dtype, np.uint8)
+    # Calibrated camera intrinsics
+    cam_calib = CameraIntrinsics(fx=800.0, fy=800.0, cx=320.0, cy=256.0, image_width=640, image_height=512)
+    assert cam_calib.calibration_state == "Calibrated"
+    assert cam_calib.to_dict()["calibration_state"] == "Calibrated"
 
-if __name__ == "__main__":
-    unittest.main()
+def test_pointcloud_and_outlier_filtering():
+    depth = np.ones((100, 100), dtype=np.float32) * 5.0
+    # Add an extreme outlier point
+    depth[50, 50] = 500.0
+    
+    rgb = np.zeros((100, 100, 3), dtype=np.uint8)
+    cam = CameraIntrinsics(image_width=100, image_height=100)
+
+    pts, colors, pc_meta = depth_to_pointcloud(depth, rgb, cam, subsample=1)
+    assert pts.shape[1] == 3
+    assert pc_meta["outlier_filtered"] is True
+
+def test_ff_fusion_fallback():
+    model = FFFusionModel(checkpoint_path="non_existent_weights.pth")
+    rgb = np.zeros((100, 100, 3), dtype=np.uint8)
+    th = np.full((100, 100, 3), 128, dtype=np.uint8)
+
+    fused, info = model.fuse(rgb, th)
+    assert fused.shape == (100, 100, 3)
+    assert info["status"] == "FALLBACK"
+
+def test_depth_anything_quality_statistics():
+    model = DepthAnythingV2Model()
+    rgb = np.ones((100, 100, 3), dtype=np.uint8) * 100
+    raw_depth, norm_visual, quality = model.predict_depth(rgb)
+
+    assert raw_depth.shape == (100, 100)
+    assert norm_visual.shape == (100, 100, 3)
+    assert "min_depth" in quality
+    assert "max_depth" in quality
+    assert "mean_depth" in quality
+    assert "std_depth" in quality
+    assert "percentile_range" in quality
+    assert quality["depth_mode"] == "Relative"
