@@ -139,6 +139,14 @@ export function setupUI(viewer: TerrainViewer3D) {
       sidebarStateText.textContent = "Offline";
     });
 
+  // Combined Scene Previews
+  const scenePreviewThermal = document.getElementById('scene-preview-thermal') as HTMLImageElement;
+  const scenePreviewCgan = document.getElementById('scene-preview-cgan') as HTMLImageElement;
+  const scenePreviewDepth = document.getElementById('scene-preview-depth') as HTMLImageElement;
+  const scenePlaceholderThermal = document.getElementById('scene-placeholder-thermal')!;
+  const scenePlaceholderCgan = document.getElementById('scene-placeholder-cgan')!;
+  const scenePlaceholderDepth = document.getElementById('scene-placeholder-depth')!;
+
   // Handle Single Thermal Upload
   overviewDropThermal.addEventListener('click', () => overviewFileThermal.click());
   overviewFileThermal.addEventListener('change', (e) => {
@@ -152,6 +160,13 @@ export function setupUI(viewer: TerrainViewer3D) {
       viewWorkspaceThermal.src = url;
       viewWorkspaceThermal.classList.remove('hidden');
       if (placeholderThermal) placeholderThermal.classList.add('hidden');
+
+      if (scenePreviewThermal) {
+        scenePreviewThermal.src = url;
+        scenePreviewThermal.classList.remove('hidden');
+        if (scenePlaceholderThermal) scenePlaceholderThermal.classList.add('hidden');
+      }
+
       metaThermalSpecs.textContent = `${selectedThermalFile.name} (${(selectedThermalFile.size / 1024).toFixed(1)} KB)`;
       btnOverviewAnalyze.disabled = false;
     }
@@ -216,11 +231,17 @@ export function setupUI(viewer: TerrainViewer3D) {
       // 2. Run Pipeline (Thermal -> cGAN -> FF-Fusion -> Depth Anything V2 -> 3D)
       const result = await runAnalysis(uploadRes.thermal_path, intrinsics);
 
-      // Populate cGAN Tab
+      // Populate cGAN Tab & Scene Combined View
       viewWorkspaceCgan.src = result.artifacts.generated_rgb;
       viewWorkspaceCgan.classList.remove('hidden');
       if (placeholderCgan) placeholderCgan.classList.add('hidden');
       metaCganSpecs.textContent = "Generated RGB (640 × 512)";
+
+      if (scenePreviewCgan) {
+        scenePreviewCgan.src = result.artifacts.generated_rgb;
+        scenePreviewCgan.classList.remove('hidden');
+        if (scenePlaceholderCgan) scenePlaceholderCgan.classList.add('hidden');
+      }
 
       // Populate Fusion Tab
       if (isFusionBypassed) {
@@ -237,7 +258,7 @@ export function setupUI(viewer: TerrainViewer3D) {
       fusionMetaModel.textContent = result.metadata.fusion_model;
       fusionMetaStatus.textContent = "Complete";
 
-      // Populate Depth Tab
+      // Populate Depth Tab & Scene Combined View
       viewDepthLarge.src = result.artifacts.depth_preview;
       viewDepthLarge.classList.remove('hidden');
       if (depthPlaceholder) depthPlaceholder.classList.add('hidden');
@@ -245,6 +266,12 @@ export function setupUI(viewer: TerrainViewer3D) {
       depthMetaMin.textContent = result.metadata.depth_quality.min_depth.toString();
       depthMetaMax.textContent = result.metadata.depth_quality.max_depth.toString();
       depthMetaStd.textContent = result.metadata.depth_quality.std_depth.toString();
+
+      if (scenePreviewDepth) {
+        scenePreviewDepth.src = result.artifacts.depth_preview;
+        scenePreviewDepth.classList.remove('hidden');
+        if (scenePlaceholderDepth) scenePlaceholderDepth.classList.add('hidden');
+      }
 
       // Update 3D Metadata Footer
       metaVCount.textContent = result.metadata.mesh.num_vertices.toLocaleString();

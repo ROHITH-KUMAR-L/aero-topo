@@ -236,6 +236,43 @@
 
         <!-- TAB 5: 3D SCENE -->
         <section id="tab-scene" class="workspace-tab">
+          <!-- Combined Perception & 3D Reconstruction Header Strip -->
+          <div class="scene-combined-header">
+            <div class="scene-preview-strip">
+              <div class="scene-preview-card">
+                <div class="preview-card-header">
+                  <span>INPUT THERMAL IR (1-CHANNEL)</span>
+                </div>
+                <div class="preview-img-container">
+                  <span id="scene-placeholder-thermal" class="placeholder-text-sm">Awaiting Thermal Input</span>
+                  <img id="scene-preview-thermal" class="preview-img hidden" alt="Thermal IR Input" />
+                </div>
+              </div>
+
+              <div class="scene-preview-card highlight-card">
+                <div class="preview-card-header">
+                  <span>cGAN GENERATED RGB</span>
+                  <span class="badge badge-info">FLAME 3</span>
+                </div>
+                <div class="preview-img-container">
+                  <span id="scene-placeholder-cgan" class="placeholder-text-sm">Awaiting cGAN Inference</span>
+                  <img id="scene-preview-cgan" class="preview-img hidden" alt="cGAN Generated RGB" />
+                </div>
+              </div>
+
+              <div class="scene-preview-card">
+                <div class="preview-card-header">
+                  <span>RELATIVE DEPTH MAP</span>
+                  <span class="badge badge-info">Depth V2</span>
+                </div>
+                <div class="preview-img-container">
+                  <span id="scene-placeholder-depth" class="placeholder-text-sm">Awaiting Depth Map</span>
+                  <img id="scene-preview-depth" class="preview-img hidden" alt="Relative Depth" />
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div class="scene-workspace">
             
             <div class="scene-header">
