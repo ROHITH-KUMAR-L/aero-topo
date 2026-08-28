@@ -1,8 +1,27 @@
 export interface SystemStatus {
-  ff_fusion: { ready: boolean; status_message: string };
-  depth_anything: { ready: boolean; encoder: string; mode: string; status_message: string };
-  robofirefusenet: { enabled: boolean; ready: boolean };
-  generative_api: { enabled: boolean; ready: boolean; status_message: string };
+  cgan: {
+    available: boolean;
+    checkpoint: string;
+    architecture: string;
+    input_channels: number;
+    output_channels: number;
+    image_size: number;
+    status_message: string;
+  };
+  ff_fusion: {
+    enabled?: boolean;
+    available: boolean;
+    mode?: string;
+    checkpoint: string;
+    status_message: string;
+  };
+  depth_anything_v2: {
+    available: boolean;
+    variant: string;
+    depth_mode: string;
+    checkpoint: string;
+    status_message: string;
+  };
 }
 
 export interface AnalysisResponse {
@@ -10,27 +29,23 @@ export interface AnalysisResponse {
   run_id: string;
   processing_time_sec: number;
   artifacts: {
-    input_rgb: string;
     input_thermal: string;
+    generated_rgb: string;
     fused: string;
     depth_preview: string;
     depth_npy: string;
     pointcloud_ply: string;
     terrain_obj: string;
     terrain_glb: string | null;
-    generated_rgb: string | null;
     metadata_json: string;
   };
   metadata: {
     run_id: string;
     timestamp: string;
+    cgan_model: string;
     fusion_model: string;
-    smoke_confidence: {
-      estimate_type: string;
-      smoke_level: string;
-      visibility_level: string;
-      description: string;
-    };
+    depth_model: string;
+    depth_mode: string;
     depth_quality: {
       status: string;
       depth_mode: string;
@@ -72,9 +87,8 @@ export async function fetchSystemStatus(): Promise<SystemStatus> {
   return await resp.json();
 }
 
-export async function uploadImagePair(rgbFile: File, thermalFile: File): Promise<{ session_id: string; rgb_path: string; thermal_path: string }> {
+export async function uploadThermalImage(thermalFile: File): Promise<{ session_id: string; thermal_path: string }> {
   const formData = new FormData();
-  formData.append("rgb_file", rgbFile);
   formData.append("thermal_file", thermalFile);
 
   const resp = await fetch(`${API_BASE}/api/uploads`, {
@@ -84,21 +98,17 @@ export async function uploadImagePair(rgbFile: File, thermalFile: File): Promise
 
   if (!resp.ok) {
     const err = await resp.json();
-    throw new Error(err.detail || "Failed to upload image pair.");
+    throw new Error(err.detail || "Failed to upload thermal image.");
   }
   return await resp.json();
 }
 
 export async function runAnalysis(
-  rgbPath: string,
   thermalPath: string,
-  enableGenerative: boolean,
   intrinsics?: { fx?: number; fy?: number; cx?: number; cy?: number }
 ): Promise<AnalysisResponse> {
   const payload: any = {
-    rgb_path: rgbPath,
-    thermal_path: thermalPath,
-    enable_generative: enableGenerative
+    thermal_path: thermalPath
   };
 
   if (intrinsics) {

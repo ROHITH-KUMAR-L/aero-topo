@@ -43,9 +43,9 @@ class FFFusionStudentNet(nn.Module):
 class FFFusionModel:
     """
     FF-Fusion Model Wrapper.
-    Handles weight loading, inference, and fallback signal fusion when weights are unavailable.
+    Handles weight loading and inference for visible-infrared multimodal fusion.
     """
-    def __init__(self, checkpoint_path: str = "models/ff_fusion_student.pth", device: str = "cuda", fp16: bool = True):
+    def __init__(self, checkpoint_path: str = "models/checkpoints/ff_fusion.pth", device: str = "cuda", fp16: bool = True):
         self.checkpoint_path = checkpoint_path
         self.device = torch.device(device if torch.cuda.is_available() and device == "cuda" else "cpu")
         self.fp16 = fp16 and self.device.type == "cuda"
@@ -58,9 +58,9 @@ class FFFusionModel:
     def _initialize_model(self):
         if not os.path.exists(self.checkpoint_path):
             self.status_message = (
-                f"Official FF-Fusion weights not found at '{self.checkpoint_path}'. "
+                f"FF-Fusion model weights not found at '{self.checkpoint_path}'. "
                 f"Official source: {OFFICIAL_SOURCE_URL}. "
-                "System will use spatial frequency gradient fusion fallback for FF-Fusion stage."
+                "Place ff_fusion.pth in models/checkpoints/ or configure its Hugging Face repository."
             )
             logger.warning(self.status_message)
             self.is_ready = False
@@ -69,6 +69,8 @@ class FFFusionModel:
         try:
             model = FFFusionStudentNet()
             state_dict = torch.load(self.checkpoint_path, map_location=self.device)
+            if isinstance(state_dict, dict) and "state_dict" in state_dict:
+                state_dict = state_dict["state_dict"]
             model.load_state_dict(state_dict)
             model.to(self.device)
             model.eval()
@@ -81,68 +83,43 @@ class FFFusionModel:
             self.status_message = f"Failed to load FF-Fusion weights from '{self.checkpoint_path}': {e}"
             logger.error(self.status_message)
 
-    def fuse(self, rgb: np.ndarray, thermal_3ch: np.ndarray) -> Tuple[np.ndarray, Dict[str, Any]]:
+    def fuse(self, rgb: np.ndarray, thermal_3ch: np.ndarray) -> Tuple[Optional[np.ndarray], Dict[str, Any]]:
         """
-        Run fusion on paired RGB (H, W, 3) and thermal_3ch (H, W, 3) uint8 numpy arrays.
+        Run fusion on paired Generated RGB (H, W, 3) and thermal_3ch (H, W, 3) uint8 numpy arrays.
         Returns:
             fused_image: uint8 numpy array (H, W, 3)
             info: Dict metadata
         """
-        if self.is_ready and self.model is not None:
-            # Neural network inference
-            try:
-                rgb_t = torch.from_numpy(rgb.transpose(2, 0, 1)).unsqueeze(0).float() / 255.0
-                ir_t = torch.from_numpy(thermal_3ch.transpose(2, 0, 1)).unsqueeze(0).float() / 255.0
+        if not self.is_ready or self.model is None:
+            return None, {
+                "fusion_method": "FF-Fusion",
+                "status": "UNAVAILABLE",
+                "message": self.status_message,
+                "label": "FF-Fusion Model Unavailable"
+            }
 
-                rgb_t = rgb_t.to(self.device)
-                ir_t = ir_t.to(self.device)
+        try:
+            rgb_t = torch.from_numpy(rgb.transpose(2, 0, 1)).unsqueeze(0).float() / 255.0
+            ir_t = torch.from_numpy(thermal_3ch.transpose(2, 0, 1)).unsqueeze(0).float() / 255.0
 
-                with torch.no_grad():
-                    if self.fp16:
-                        with torch.cuda.amp.autocast():
-                            out_t = self.model(rgb_t, ir_t)
-                    else:
-                        out_t = self.model(rgb_t, ir_t)
+            rgb_t = rgb_t.to(self.device)
+            ir_t = ir_t.to(self.device)
 
-                fused_np = (out_t.squeeze(0).cpu().numpy().transpose(1, 2, 0) * 255.0).clip(0, 255).astype(np.uint8)
-                return fused_np, {
-                    "fusion_method": "FF-Fusion-Distilled-NN",
-                    "status": "SUCCESS",
-                    "device": str(self.device)
-                }
-            except Exception as e:
-                logger.error(f"FF-Fusion inference error: {e}. Falling back to spatial frequency fusion.")
+            with torch.inference_mode():
+                out_t = self.model(rgb_t, ir_t)
 
-        # Frequency/gradient domain visible-infrared fusion fallback
-        fused_np = self._frequency_gradient_fusion(rgb, thermal_3ch)
-        return fused_np, {
-            "fusion_method": "FF-Fusion-Frequency-Gradient-Fallback",
-            "status": "FALLBACK",
-            "weights_found": False,
-            "official_source": OFFICIAL_SOURCE_URL,
-            "device": str(self.device)
-        }
+            fused_np = (out_t.squeeze(0).cpu().numpy().transpose(1, 2, 0) * 255.0).clip(0, 255).astype(np.uint8)
+            return fused_np, {
+                "fusion_method": "FF-Fusion-Neural-Network",
+                "status": "SUCCESS",
+                "device": str(self.device)
+            }
+        except Exception as e:
+            logger.error(f"FF-Fusion inference error: {e}")
+            return None, {
+                "fusion_method": "FF-Fusion",
+                "status": "ERROR",
+                "message": str(e),
+                "label": "FF-Fusion Inference Error"
+            }
 
-    def _frequency_gradient_fusion(self, rgb: np.ndarray, thermal_3ch: np.ndarray) -> np.ndarray:
-        """
-        Multiscale Spatial Frequency & Detail Fusion preserving RGB color structural details 
-        and thermal infrared heat distribution under heavy smoke.
-        """
-        rgb_float = rgb.astype(np.float32)
-        th_float = thermal_3ch.astype(np.float32)
-
-        # Extract thermal weight map based on local intensity & contrast
-        th_gray = cv2.cvtColor(thermal_3ch, cv2.COLOR_RGB2GRAY).astype(np.float32) / 255.0
-        
-        # High-pass filter for RGB details
-        rgb_blur = cv2.GaussianBlur(rgb_float, (7, 7), 0)
-        rgb_detail = rgb_float - rgb_blur
-
-        # Weighted combination: thermal base illumination + RGB high-frequency details
-        alpha = np.expand_dims(th_gray, axis=2)
-        
-        # Blend base colors
-        fused_base = (1.0 - alpha * 0.4) * rgb_blur + (alpha * 0.4) * th_float
-        fused = fused_base + rgb_detail * (1.0 + alpha * 0.3)
-
-        return np.clip(fused, 0, 255).astype(np.uint8)

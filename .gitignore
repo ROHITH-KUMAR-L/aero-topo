@@ -44,3 +44,15 @@ venv/
 .DS_Store
 Thumbs.db
 *.log
+
+# Additional caches and temporary files
+.mypy_cache/
+.ruff_cache/
+.tox/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+.ipynb_checkpoints/
+**.pth

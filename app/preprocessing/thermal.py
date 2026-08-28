@@ -71,3 +71,25 @@ def load_thermal_image(file_path_or_bytes) -> Tuple[np.ndarray, np.ndarray, Dict
     }
 
     return raw_float, norm_3ch, metadata
+
+def preprocess_thermal_for_cgan(raw_float: np.ndarray, target_size: Tuple[int, int] = (256, 256)) -> np.ndarray:
+    """
+    Preprocess thermal raw float array into single-channel [H, W] in [-1, 1] range expected by UNetGenerator.
+
+    Uses robust percentile normalization (1st to 99th percentile) to suppress outlier pixel values
+    common in raw 16-bit radiometric thermal imagery before scaling to [-1, 1].
+    """
+    flat = raw_float.flatten()
+    p1 = float(np.percentile(flat, 1))
+    p99 = float(np.percentile(flat, 99))
+    val_range = p99 - p1
+
+    if val_range < 1e-6:
+        norm_01 = np.zeros_like(raw_float, dtype=np.float32)
+    else:
+        norm_01 = np.clip((raw_float - p1) / val_range, 0.0, 1.0)
+
+    norm_minus1_to_1 = (norm_01 * 2.0) - 1.0
+    resized_256 = cv2.resize(norm_minus1_to_1.astype(np.float32), target_size, interpolation=cv2.INTER_AREA)
+    return resized_256
+

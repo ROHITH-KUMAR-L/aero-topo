@@ -1,8 +1,7 @@
-import { fetchSystemStatus, uploadImagePair, runAnalysis, AnalysisResponse } from './api';
+import { fetchSystemStatus, uploadThermalImage, runAnalysis, AnalysisResponse } from './api';
 import { TerrainViewer3D } from './viewer';
 
 export function setupUI(viewer: TerrainViewer3D) {
-  let selectedRgbFile: File | null = null;
   let selectedThermalFile: File | null = null;
   let historyLogs: any[] = [];
 
@@ -46,24 +45,19 @@ export function setupUI(viewer: TerrainViewer3D) {
     btnNavSettings.addEventListener('click', () => switchTab('system'));
   }
 
-  // Dropzone Elements (Overview & Inputs)
-  const overviewDropRgb = document.getElementById('overview-drop-rgb')!;
+  // Dropzone Elements
   const overviewDropThermal = document.getElementById('overview-drop-thermal')!;
-  const overviewFileRgb = document.getElementById('overview-file-rgb') as HTMLInputElement;
   const overviewFileThermal = document.getElementById('overview-file-thermal') as HTMLInputElement;
-  const overviewPreviewRgb = document.getElementById('overview-preview-rgb') as HTMLImageElement;
   const overviewPreviewThermal = document.getElementById('overview-preview-thermal') as HTMLImageElement;
-
   const btnOverviewAnalyze = document.getElementById('btn-overview-analyze') as HTMLButtonElement;
-  const chkOverviewGen = document.getElementById('overview-chk-generative') as HTMLInputElement;
 
-  // Workspace Image Elements
-  const viewWorkspaceRgb = document.getElementById('view-workspace-rgb') as HTMLImageElement;
+  // cGAN Workspace Views
   const viewWorkspaceThermal = document.getElementById('view-workspace-thermal') as HTMLImageElement;
-  const metaRgbSpecs = document.getElementById('meta-rgb-specs')!;
+  const viewWorkspaceCgan = document.getElementById('view-workspace-cgan') as HTMLImageElement;
   const metaThermalSpecs = document.getElementById('meta-thermal-specs')!;
-  const placeholderWorkspaceRgb = document.querySelector('#container-workspace-rgb .placeholder-text')!;
-  const placeholderWorkspaceThermal = document.querySelector('#container-workspace-thermal .placeholder-text')!;
+  const metaCganSpecs = document.getElementById('meta-cgan-specs')!;
+  const placeholderThermal = document.getElementById('placeholder-thermal')!;
+  const placeholderCgan = document.getElementById('placeholder-cgan')!;
 
   // Output Views
   const viewFusionLarge = document.getElementById('view-fusion-large') as HTMLImageElement;
@@ -82,7 +76,6 @@ export function setupUI(viewer: TerrainViewer3D) {
   const sliderExaggeration = document.getElementById('slider-exaggeration') as HTMLInputElement;
   const valExaggeration = document.getElementById('val-exaggeration')!;
   const selectMode = document.getElementById('select-mode') as HTMLSelectElement;
-  const selectTexture = document.getElementById('select-texture') as HTMLSelectElement;
   const chkWireframe = document.getElementById('chk-wireframe') as HTMLInputElement;
   const chkAutoRotate = document.getElementById('chk-autorotate') as HTMLInputElement;
   const btnResetCam = document.getElementById('btn-scene-reset-cam') as HTMLButtonElement;
@@ -91,18 +84,12 @@ export function setupUI(viewer: TerrainViewer3D) {
   const metaVCount = document.getElementById('meta-v-count')!;
   const metaFCount = document.getElementById('meta-f-count')!;
   const metaCamState = document.getElementById('meta-cam-state')!;
-  const metaSmokeLevel = document.getElementById('meta-smoke-level')!;
 
   // Export Buttons
   const dlGlb = document.getElementById('dl-glb') as HTMLAnchorElement;
   const dlObj = document.getElementById('dl-obj') as HTMLAnchorElement;
   const dlPly = document.getElementById('dl-ply') as HTMLAnchorElement;
   const dlNpy = document.getElementById('dl-npy') as HTMLAnchorElement;
-
-  // Compare View
-  const compImgRgb = document.getElementById('comp-img-rgb') as HTMLImageElement;
-  const compImgFusion = document.getElementById('comp-img-fusion') as HTMLImageElement;
-  const compImgGen = document.getElementById('comp-img-gen') as HTMLImageElement;
 
   // History Table
   const historyTableBody = document.getElementById('history-table-body')!;
@@ -116,37 +103,43 @@ export function setupUI(viewer: TerrainViewer3D) {
   const btnPresetIntrinsics = document.getElementById('btn-preset-intrinsics')!;
   const btnClearIntrinsics = document.getElementById('btn-clear-intrinsics')!;
 
+  // Status Cells & Indicators
+  const statusCganDot = document.getElementById('status-cgan-dot')!;
+  const statusCganText = document.getElementById('status-cgan-text')!;
+  const statusCellCgan = document.getElementById('status-cell-cgan')!;
+  const statusCellFusion = document.getElementById('status-cell-fusion')!;
+  const statusCellDepth = document.getElementById('status-cell-depth')!;
+
   const loadingOverlay = document.getElementById('canvas-overlay-loading')!;
   const sidebarStateText = document.getElementById('sidebar-state-text')!;
 
-  // Initial Status Check
+  // Check System Status
+  let isFusionBypassed = false;
   fetchSystemStatus()
     .then(status => {
       sidebarStateText.textContent = "Ready";
+      
+      const cganAvail = status.cgan?.available;
+      if (statusCganDot) statusCganDot.className = `status-dot ${cganAvail ? 'green' : 'red'}`;
+      if (statusCganText) statusCganText.textContent = cganAvail ? "cGAN Ready" : "cGAN Missing";
+      
+      if (statusCellCgan) statusCellCgan.textContent = status.cgan?.status_message || (cganAvail ? "Ready" : "Unavailable");
+      if (statusCellFusion) statusCellFusion.textContent = status.ff_fusion?.status_message || "Ready";
+      if (statusCellDepth) statusCellDepth.textContent = status.depth_anything_v2?.status_message || "Ready";
+
+      if (status.ff_fusion?.mode === 'bypass') {
+        isFusionBypassed = true;
+        const fusionTitle = document.getElementById('fusion-page-title');
+        if (fusionTitle) fusionTitle.textContent = 'FF-Fusion: Disabled / Bypass Mode';
+        const fusionDesc = document.getElementById('fusion-page-desc');
+        if (fusionDesc) fusionDesc.textContent = 'Fusion Bypassed: Depth Anything V2 is receiving the Generated RGB directly.';
+      }
     })
     .catch(() => {
       sidebarStateText.textContent = "Offline";
     });
 
-  // Handle RGB Upload
-  overviewDropRgb.addEventListener('click', () => overviewFileRgb.click());
-  overviewFileRgb.addEventListener('change', (e) => {
-    const files = (e.target as HTMLInputElement).files;
-    if (files && files.length > 0) {
-      selectedRgbFile = files[0];
-      const url = URL.createObjectURL(selectedRgbFile);
-      overviewPreviewRgb.src = url;
-      overviewPreviewRgb.classList.remove('hidden');
-
-      viewWorkspaceRgb.src = url;
-      viewWorkspaceRgb.classList.remove('hidden');
-      if (placeholderWorkspaceRgb) placeholderWorkspaceRgb.classList.add('hidden');
-      metaRgbSpecs.textContent = `${selectedRgbFile.name} (${(selectedRgbFile.size / 1024).toFixed(1)} KB)`;
-      checkReadyToAnalyze();
-    }
-  });
-
-  // Handle Thermal Upload
+  // Handle Single Thermal Upload
   overviewDropThermal.addEventListener('click', () => overviewFileThermal.click());
   overviewFileThermal.addEventListener('change', (e) => {
     const files = (e.target as HTMLInputElement).files;
@@ -158,15 +151,11 @@ export function setupUI(viewer: TerrainViewer3D) {
 
       viewWorkspaceThermal.src = url;
       viewWorkspaceThermal.classList.remove('hidden');
-      if (placeholderWorkspaceThermal) placeholderWorkspaceThermal.classList.add('hidden');
+      if (placeholderThermal) placeholderThermal.classList.add('hidden');
       metaThermalSpecs.textContent = `${selectedThermalFile.name} (${(selectedThermalFile.size / 1024).toFixed(1)} KB)`;
-      checkReadyToAnalyze();
+      btnOverviewAnalyze.disabled = false;
     }
   });
-
-  function checkReadyToAnalyze() {
-    btnOverviewAnalyze.disabled = !(selectedRgbFile && selectedThermalFile);
-  }
 
   // Intrinsics Helpers
   function updateIntrinsicsState() {
@@ -205,9 +194,9 @@ export function setupUI(viewer: TerrainViewer3D) {
     });
   }
 
-  // Run Analysis Handler
+  // Run Perception & 3D Reconstruction Pipeline Handler
   btnOverviewAnalyze.addEventListener('click', async () => {
-    if (!selectedRgbFile || !selectedThermalFile) return;
+    if (!selectedThermalFile) return;
 
     loadingOverlay.classList.remove('hidden');
     btnOverviewAnalyze.disabled = true;
@@ -221,25 +210,37 @@ export function setupUI(viewer: TerrainViewer3D) {
     };
 
     try {
-      const uploadRes = await uploadImagePair(selectedRgbFile, selectedThermalFile);
-      const result = await runAnalysis(
-        uploadRes.rgb_path,
-        uploadRes.thermal_path,
-        chkOverviewGen.checked,
-        intrinsics
-      );
+      // 1. Upload Thermal File
+      const uploadRes = await uploadThermalImage(selectedThermalFile);
+
+      // 2. Run Pipeline (Thermal -> cGAN -> FF-Fusion -> Depth Anything V2 -> 3D)
+      const result = await runAnalysis(uploadRes.thermal_path, intrinsics);
+
+      // Populate cGAN Tab
+      viewWorkspaceCgan.src = result.artifacts.generated_rgb;
+      viewWorkspaceCgan.classList.remove('hidden');
+      if (placeholderCgan) placeholderCgan.classList.add('hidden');
+      metaCganSpecs.textContent = "Generated RGB (640 × 512)";
 
       // Populate Fusion Tab
-      viewFusionLarge.src = result.artifacts.fused;
-      viewFusionLarge.classList.remove('hidden');
-      fusionPlaceholder.classList.add('hidden');
+      if (isFusionBypassed) {
+        viewFusionLarge.classList.add('hidden');
+        if (fusionPlaceholder) {
+            fusionPlaceholder.textContent = 'Fusion Bypassed (Depth Anything V2 is receiving Generated RGB)';
+            fusionPlaceholder.classList.remove('hidden');
+        }
+      } else {
+        viewFusionLarge.src = result.artifacts.fused;
+        viewFusionLarge.classList.remove('hidden');
+        if (fusionPlaceholder) fusionPlaceholder.classList.add('hidden');
+      }
       fusionMetaModel.textContent = result.metadata.fusion_model;
       fusionMetaStatus.textContent = "Complete";
 
       // Populate Depth Tab
       viewDepthLarge.src = result.artifacts.depth_preview;
       viewDepthLarge.classList.remove('hidden');
-      depthPlaceholder.classList.add('hidden');
+      if (depthPlaceholder) depthPlaceholder.classList.add('hidden');
       depthMetaStatus.textContent = result.metadata.depth_quality.status;
       depthMetaMin.textContent = result.metadata.depth_quality.min_depth.toString();
       depthMetaMax.textContent = result.metadata.depth_quality.max_depth.toString();
@@ -249,7 +250,6 @@ export function setupUI(viewer: TerrainViewer3D) {
       metaVCount.textContent = result.metadata.mesh.num_vertices.toLocaleString();
       metaFCount.textContent = result.metadata.mesh.num_faces.toLocaleString();
       metaCamState.textContent = result.metadata.camera_intrinsics.calibration_state;
-      metaSmokeLevel.textContent = `Heuristic (${result.metadata.smoke_confidence.smoke_level})`;
 
       // Enable Export Links
       if (result.artifacts.terrain_glb) {
@@ -263,18 +263,7 @@ export function setupUI(viewer: TerrainViewer3D) {
       dlNpy.href = result.artifacts.depth_npy;
       dlNpy.classList.remove('disabled');
 
-      // Populate Compare Tab
-      compImgRgb.src = result.artifacts.input_rgb;
-      compImgRgb.classList.remove('hidden');
-      compImgFusion.src = result.artifacts.depth_preview;
-      compImgFusion.classList.remove('hidden');
-
-      if (result.artifacts.generated_rgb) {
-        compImgGen.src = result.artifacts.generated_rgb;
-        compImgGen.classList.remove('hidden');
-      }
-
-      // Add to History Table Log
+      // Add to History Table
       addHistoryRow(result);
 
       // Fetch Raw Depth NPY for 3D Viewport
@@ -289,7 +278,7 @@ export function setupUI(viewer: TerrainViewer3D) {
         viewer.updateTerrain(depthFloatArray, 640, 512, fusedImgObj);
         loadingOverlay.classList.add('hidden');
         sidebarStateText.textContent = "Complete";
-        // Auto navigate to 3D Scene View (The Main Feature)
+        // Auto navigate to 3D Scene View
         switchTab('scene');
       };
 
@@ -311,9 +300,9 @@ export function setupUI(viewer: TerrainViewer3D) {
       tr.innerHTML = `
         <td class="text-mono">${res.metadata.timestamp.split(' ')[1]}</td>
         <td class="text-mono">${res.run_id}</td>
+        <td class="text-mono">${res.metadata.cgan_model}</td>
         <td class="text-mono">${res.metadata.fusion_model}</td>
         <td class="text-mono">Depth Anything V2 Small</td>
-        <td class="text-mono">${res.metadata.depth_quality.status}</td>
         <td class="text-mono">${res.processing_time_sec}s</td>
       `;
       historyTableBody.prepend(tr);

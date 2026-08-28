@@ -25,8 +25,8 @@ logger = logging.getLogger("AeroTopo.Main")
 
 app = FastAPI(
     title="Aero-Topo API",
-    description="Smoke-resilient UAV RGB+Thermal fusion, depth estimation, and 3D topographical visualization system.",
-    version="1.0.0"
+    description="Thermal-first wildfire perception system: Thermal IR -> Pix2Pix cGAN -> Generated RGB -> FF-Fusion -> Depth Anything V2 -> 3D topographical reconstruction.",
+    version="2.0.0"
 )
 
 # CORS Middleware

@@ -2,17 +2,16 @@ import os
 import yaml
 import logging
 from typing import Optional, Dict, Any
+from app.models.cgan import CGANModel
 from app.models.ff_fusion import FFFusionModel
 from app.models.depth_anything import DepthAnythingV2Model
-from app.models.robofirefusenet import RoboFireFuseNetModel
-from app.models.generative_api import GenerativeRGBClient
 
 logger = logging.getLogger("AeroTopo.ModelManager")
 
 class ModelManager:
     """
     Singleton Lazy Model Manager.
-    Ensures FF-Fusion, Depth Anything V2, RoboFireFuseNet, and Generative API clients
+    Ensures cGAN, FF-Fusion, and Depth Anything V2
     are loaded once into GPU/CPU memory and cached across inference requests.
     """
     _instance: Optional['ModelManager'] = None
@@ -30,24 +29,36 @@ class ModelManager:
         self.config_path = config_path
         self.config = self._load_config()
         
+        self._cgan: Optional[CGANModel] = None
         self._ff_fusion: Optional[FFFusionModel] = None
         self._depth_anything: Optional[DepthAnythingV2Model] = None
-        self._robofirefusenet: Optional[RoboFireFuseNetModel] = None
-        self._generative_client: Optional[GenerativeRGBClient] = None
         self._initialized = True
 
     def _load_config(self) -> Dict[str, Any]:
         if os.path.exists(self.config_path):
             with open(self.config_path, "r") as f:
-                return yaml.safe_load(f)
+                return yaml.safe_load(f) or {}
         return {}
 
     @property
-    def ff_fusion(self) -> FFFusionModel:
+    def cgan(self) -> CGANModel:
+        if self._cgan is None:
+            cfg = self.config.get("models", {}).get("cgan", {})
+            self._cgan = CGANModel(
+                checkpoint_path=cfg.get("checkpoint_path", "models/checkpoints/generator_best.pth"),
+                device=cfg.get("device", "cuda")
+            )
+        return self._cgan
+
+    @property
+    def ff_fusion(self) -> Optional[FFFusionModel]:
+        cfg = self.config.get("models", {}).get("fusion", {})
+        if not cfg.get("enabled", True):
+            return None
+
         if self._ff_fusion is None:
-            cfg = self.config.get("models", {}).get("fusion", {})
             self._ff_fusion = FFFusionModel(
-                checkpoint_path=cfg.get("local_path", "models/ff_fusion_student.pth"),
+                checkpoint_path=cfg.get("checkpoint_path", "models/checkpoints/ff_fusion.pth"),
                 device=cfg.get("device", "cuda"),
                 fp16=cfg.get("fp16", True)
             )
@@ -60,52 +71,49 @@ class ModelManager:
             self._depth_anything = DepthAnythingV2Model(
                 encoder=cfg.get("encoder", "vits"),
                 mode=cfg.get("mode", "relative"),
-                checkpoint_path=cfg.get("local_path", "models/depth_anything_v2_vits.pth"),
+                checkpoint_path=cfg.get("checkpoint_path", "models/checkpoints/depth_anything_v2.pth"),
                 device=cfg.get("device", "cuda"),
                 fp16=cfg.get("fp16", True)
             )
         return self._depth_anything
 
-    @property
-    def robofirefusenet(self) -> RoboFireFuseNetModel:
-        if self._robofirefusenet is None:
-            cfg = self.config.get("models", {}).get("robofirefusenet", {})
-            self._robofirefusenet = RoboFireFuseNetModel(
-                checkpoint_path=cfg.get("local_path", "models/robofirefusenet.pth"),
-                enabled=cfg.get("enabled", False)
-            )
-        return self._robofirefusenet
-
-    @property
-    def generative_client(self) -> GenerativeRGBClient:
-        if self._generative_client is None:
-            cfg = self.config.get("generative", {})
-            self._generative_client = GenerativeRGBClient(
-                enabled=cfg.get("enabled", False),
-                model=cfg.get("model", "gpt-image-2"),
-                prompt=cfg.get("prompt", "")
-            )
-        return self._generative_client
-
     def get_status(self) -> Dict[str, Any]:
+        fusion_cfg = self.config.get("models", {}).get("fusion", {})
+        fusion_enabled = fusion_cfg.get("enabled", True)
+        
+        if fusion_enabled:
+            fusion_status = {
+                "enabled": True,
+                "available": self.ff_fusion.is_ready if self.ff_fusion else False,
+                "mode": "active",
+                "checkpoint": os.path.basename(self.ff_fusion.checkpoint_path) if self.ff_fusion else "None",
+                "status_message": self.ff_fusion.status_message if self.ff_fusion else "Not initialized"
+            }
+        else:
+            fusion_status = {
+                "enabled": False,
+                "available": False,
+                "mode": "bypass",
+                "status_message": "Fusion bypassed via configuration."
+            }
+
         return {
-            "ff_fusion": {
-                "ready": self.ff_fusion.is_ready,
-                "status_message": self.ff_fusion.status_message
+            "cgan": {
+                "available": self.cgan.is_ready,
+                "checkpoint": os.path.basename(self.cgan.checkpoint_path),
+                "architecture": self.cgan.metadata.get("architecture", "Pix2Pix U-Net Generator"),
+                "input_channels": self.cgan.metadata.get("input_channels", 1),
+                "output_channels": self.cgan.metadata.get("output_channels", 3),
+                "image_size": self.cgan.metadata.get("image_size", 256),
+                "status_message": self.cgan.status_message
             },
-            "depth_anything": {
-                "ready": self.depth_anything.is_ready,
-                "encoder": self.depth_anything.encoder,
-                "mode": self.depth_anything.mode,
+            "ff_fusion": fusion_status,
+            "depth_anything_v2": {
+                "available": self.depth_anything.is_ready,
+                "variant": self.depth_anything.encoder,
+                "depth_mode": self.depth_anything.mode,
+                "checkpoint": os.path.basename(self.depth_anything.checkpoint_path),
                 "status_message": self.depth_anything.status_message
-            },
-            "robofirefusenet": {
-                "enabled": self.robofirefusenet.enabled,
-                "ready": self.robofirefusenet.is_ready
-            },
-            "generative_api": {
-                "enabled": self.generative_client.enabled,
-                "ready": self.generative_client.is_available()[0],
-                "status_message": self.generative_client.is_available()[1]
             }
         }
+

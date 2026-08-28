@@ -324,6 +324,29 @@ html, body {
   object-fit: cover;
 }
 
+/* Single (full-width) drop target for thermal-only input */
+.drop-box-single {
+  border: 1px dashed var(--border-color);
+  border-radius: 4px;
+  padding: 1.25rem;
+  text-align: center;
+  cursor: pointer;
+  background: var(--bg-surface-secondary);
+  height: 110px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+}
+
+.drop-box-single:hover {
+  border-color: var(--accent-blue);
+}
+
+
 /* Tables */
 .tech-table {
   width: 100%;

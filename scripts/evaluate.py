@@ -47,9 +47,9 @@ def compute_edge_preservation(img_orig: np.ndarray, img_fused: np.ndarray) -> fl
     return float(np.sum(intersection) / np.sum(union))
 
 def main():
-    print("=== Aero-Topo Scientific Evaluation ===")
+    print("=== Aero-Topo cGAN & Fusion Quantitative Evaluation ===")
     if len(sys.argv) < 3:
-        print("Usage: python scripts/evaluate.py <rgb_path> <fused_path>")
+        print("Usage: python scripts/evaluate.py <generated_rgb_path> <reference_rgb_path>")
         return
 
     rgb_path = sys.argv[1]

@@ -57,11 +57,30 @@ def start_server(host="127.0.0.1", port=8000):
     except Exception as e:
         logger.error(f"Failed to start server: {e}")
 
+def verify_models():
+    logger.info("Initializing model checkpoints...")
+    try:
+        from app.api.model_manager import ModelManager
+        manager = ModelManager()
+        status = manager.get_status()
+        
+        logger.info("Model Status:")
+        for name, info in status.items():
+            avail = info.get("available", False)
+            ckpt = info.get("checkpoint", "unknown")
+            msg = info.get("status_message", "")
+            state_str = "[READY]" if avail else "[UNAVAILABLE]"
+            logger.info(f"  {state_str} {name.upper()}: checkpoint='{ckpt}' | {msg}")
+    except Exception as e:
+        logger.warning(f"Model status check warning: {e}")
+
 def main():
     check_python_environment()
     download_weights()
+    verify_models()
     build_frontend_if_needed()
     start_server()
+
 
 if __name__ == "__main__":
     main()

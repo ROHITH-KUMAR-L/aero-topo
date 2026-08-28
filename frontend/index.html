@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Aero-Topo — Thermal-Visible 3D Reconstruction</title>
+  <title>Aero-Topo — Thermal Perception & 3D Reconstruction</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -17,41 +17,38 @@
       <div class="header-left">
         <span class="app-name">Aero-Topo</span>
         <span class="header-divider">|</span>
-        <span class="app-tagline">Thermal–Visible 3D Reconstruction Workstation</span>
+        <span class="app-tagline">Thermal-to-Visible cGAN & 3D Reconstruction Workstation</span>
       </div>
       <div class="header-right">
-        <span class="status-indicator"><span class="status-dot green"></span> GPU Ready</span>
-        <span class="status-indicator"><span class="status-dot green"></span> Models Loaded</span>
-        <button id="nav-btn-settings" class="header-action-btn">Settings</button>
+        <span class="status-indicator"><span class="status-dot green" id="status-gpu-dot"></span> <span id="status-gpu-text">GPU Ready</span></span>
+        <span class="status-indicator"><span class="status-dot green" id="status-cgan-dot"></span> <span id="status-cgan-text">cGAN Ready</span></span>
+        <button id="nav-btn-settings" class="header-action-btn">System Settings</button>
       </div>
     </header>
 
     <div class="app-body">
       
-      <!-- 230px Navigation Sidebar -->
+      <!-- Navigation Sidebar -->
       <nav class="sidebar">
         <div class="sidebar-section-label">WORKSTATION</div>
         <ul class="nav-list">
           <li class="nav-item active" data-tab="overview">
             <span class="nav-label">Overview</span>
           </li>
-          <li class="nav-item" data-tab="inputs">
-            <span class="nav-label">Inputs</span>
+          <li class="nav-item" data-tab="cgan">
+            <span class="nav-label">cGAN Generated RGB</span>
           </li>
           <li class="nav-item" data-tab="fusion">
-            <span class="nav-label">Fusion</span>
+            <span class="nav-label">FF-Fusion</span>
           </li>
           <li class="nav-item" data-tab="depth">
-            <span class="nav-label">Depth</span>
+            <span class="nav-label">Relative Depth</span>
           </li>
           <li class="nav-item" data-tab="scene">
-            <span class="nav-label">3D Scene</span>
-          </li>
-          <li class="nav-item" data-tab="compare">
-            <span class="nav-label">Compare</span>
+            <span class="nav-label">3D Surface View</span>
           </li>
           <li class="nav-item" data-tab="history">
-            <span class="nav-label">History</span>
+            <span class="nav-label">Run History</span>
           </li>
           <li class="nav-item" data-tab="system">
             <span class="nav-label">System</span>
@@ -73,18 +70,23 @@
         <section id="tab-overview" class="workspace-tab active">
           <div class="page-header">
             <h1 class="page-title">Overview</h1>
-            <p class="page-desc">Smoke-resilient UAV RGB+Thermal perception and 3D relative-depth surface reconstruction.</p>
+            <p class="page-desc">Smoke-resilient UAV thermal perception, cGAN visible translation, FF-Fusion, and 3D relative-depth reconstruction.</p>
           </div>
 
           <div class="pipeline-flow-box">
             <div class="flow-step">
-              <span class="step-title">RGB + Thermal Input</span>
-              <span class="step-sub">Paired Sensor Data</span>
+              <span class="step-title">Thermal IR Input</span>
+              <span class="step-sub">1-Channel Radiometric</span>
+            </div>
+            <span class="flow-arrow">&rarr;</span>
+            <div class="flow-step">
+              <span class="step-title">Pix2Pix cGAN</span>
+              <span class="step-sub">Thermal &rarr; RGB Translation</span>
             </div>
             <span class="flow-arrow">&rarr;</span>
             <div class="flow-step">
               <span class="step-title">FF-Fusion</span>
-              <span class="step-sub">Visible-IR Fusion</span>
+              <span class="step-sub">Generated RGB + Thermal</span>
             </div>
             <span class="flow-arrow">&rarr;</span>
             <div class="flow-step">
@@ -93,98 +95,87 @@
             </div>
             <span class="flow-arrow">&rarr;</span>
             <div class="flow-step highlight">
-              <span class="step-title">3D Scene View</span>
-              <span class="step-sub">Relative Surface</span>
+              <span class="step-title">3D Surface View</span>
+              <span class="step-sub">Interactive Geometry</span>
             </div>
           </div>
 
           <div class="overview-grid">
             <div class="panel">
-              <div class="panel-header">Quick Analysis Upload</div>
+              <div class="panel-header">Thermal Analysis Input</div>
               <div class="flex flex-col gap-3">
-                <div class="drop-pair-grid">
-                  <div class="drop-box" id="overview-drop-rgb">
-                    <input type="file" id="overview-file-rgb" accept="image/*" class="hidden" />
-                    <span class="drop-title">Drop RGB Image</span>
-                    <span class="drop-hint">PNG / JPG</span>
-                    <img id="overview-preview-rgb" class="drop-preview hidden" alt="RGB Preview" />
-                  </div>
-                  <div class="drop-box" id="overview-drop-thermal">
-                    <input type="file" id="overview-file-thermal" accept="image/*,.tif,.tiff" class="hidden" />
-                    <span class="drop-title">Drop Thermal IR Image</span>
-                    <span class="drop-hint">TIFF / PNG / JPG</span>
-                    <img id="overview-preview-thermal" class="drop-preview hidden" alt="Thermal Preview" />
-                  </div>
-                </div>
-
-                <div class="form-checkbox">
-                  <label>
-                    <input type="checkbox" id="overview-chk-generative" />
-                    <span>Enable Optional Generative RGB Baseline (GPT-Image-2)</span>
-                  </label>
+                <div class="drop-box-single" id="overview-drop-thermal">
+                  <input type="file" id="overview-file-thermal" accept="image/*,.tif,.tiff" class="hidden" />
+                  <span class="drop-title">Drop Thermal / IR Image</span>
+                  <span class="drop-hint">PNG / JPG / TIFF (8-bit or 16-bit)</span>
+                  <img id="overview-preview-thermal" class="drop-preview hidden" alt="Thermal Preview" />
                 </div>
 
                 <button id="btn-overview-analyze" class="btn btn-primary" disabled>
-                  Run Analysis
+                  Run Perception &amp; 3D Reconstruction Pipeline
                 </button>
               </div>
             </div>
 
             <div class="panel">
-              <div class="panel-header">System Specifications</div>
+              <div class="panel-header">System Architecture Specifications</div>
               <table class="tech-table">
                 <tr>
-                  <td>Primary Fusion Model</td>
-                  <td class="text-mono">FF-Fusion (Student, ~1.34 MB)</td>
+                  <td>Thermal-to-RGB Generator</td>
+                  <td class="text-mono">Pix2Pix U-Net Generator (FLAME 3 Trained)</td>
                 </tr>
                 <tr>
-                  <td>Depth Foundation Engine</td>
+                  <td>Multimodal Fusion Engine</td>
+                  <td class="text-mono">FF-Fusion (distilled dual-branch NN)</td>
+                </tr>
+                <tr>
+                  <td>Relative Depth Engine</td>
                   <td class="text-mono">Depth Anything V2 Small (~24.8M)</td>
                 </tr>
                 <tr>
-                  <td>Depth Representation</td>
-                  <td class="text-mono">Relative Depth (Floating-Point)</td>
+                  <td>Depth Representation Mode</td>
+                  <td class="text-mono">Relative Depth (Float32)</td>
                 </tr>
                 <tr>
-                  <td>Camera Projection</td>
+                  <td>Camera Intrinsics Projection</td>
                   <td id="sys-camera-state" class="text-mono">Approximate Intrinsics</td>
                 </tr>
                 <tr>
-                  <td>Primary Target Hardware</td>
-                  <td class="text-mono">RTX 3050 6GB / Kaggle T4</td>
+                  <td>Target Execution Hardware</td>
+                  <td class="text-mono">RTX 3050 6GB / CUDA Acceleration</td>
                 </tr>
               </table>
             </div>
           </div>
         </section>
 
-        <!-- TAB 2: INPUTS -->
-        <section id="tab-inputs" class="workspace-tab">
+        <!-- TAB 2: cGAN GENERATED RGB -->
+        <section id="tab-cgan" class="workspace-tab">
           <div class="page-header">
-            <h1 class="page-title">Input Workspace</h1>
-            <p class="page-desc">Synchronized visible spectrum and radiometric thermal infrared sensor frames.</p>
+            <h1 class="page-title">cGAN Generated RGB</h1>
+            <p class="page-desc">Thermal-to-visible translation using trained FLAME 3 Pix2Pix UNetGenerator.</p>
           </div>
 
           <div class="dual-input-workspace">
             <div class="image-workspace-panel">
               <div class="workspace-panel-header">
-                <span>VISIBLE RGB</span>
-                <span id="meta-rgb-specs" class="text-mono text-muted">No Image</span>
+                <span>INPUT THERMAL IR (1-CHANNEL)</span>
+                <span id="meta-thermal-specs" class="text-mono text-muted">No Image</span>
               </div>
-              <div class="image-container" id="container-workspace-rgb">
-                <span class="placeholder-text">Drop or select RGB image</span>
-                <img id="view-workspace-rgb" class="workspace-img hidden" alt="RGB Workspace View" />
+              <div class="image-container" id="container-workspace-thermal">
+                <span id="placeholder-thermal" class="placeholder-text">Awaiting Thermal Input</span>
+                <img id="view-workspace-thermal" class="workspace-img hidden" alt="Thermal Input View" />
               </div>
             </div>
 
             <div class="image-workspace-panel">
               <div class="workspace-panel-header">
-                <span>THERMAL IR</span>
-                <span id="meta-thermal-specs" class="text-mono text-muted">No Image</span>
+                <span>GENERATED RGB (cGAN TRANSLATION)</span>
+                <span id="meta-cgan-specs" class="text-mono text-muted">Not Generated</span>
               </div>
-              <div class="image-container" id="container-workspace-thermal">
-                <span class="placeholder-text">Drop or select Thermal IR image</span>
-                <img id="view-workspace-thermal" class="workspace-img hidden" alt="Thermal Workspace View" />
+              <div class="image-container" id="container-workspace-cgan">
+                <span id="placeholder-cgan" class="placeholder-text">Awaiting cGAN Inference</span>
+                <img id="view-workspace-cgan" class="workspace-img hidden" alt="cGAN Generated RGB View" />
               </div>
             </div>
           </div>
@@ -193,28 +184,23 @@
         <!-- TAB 3: FUSION -->
         <section id="tab-fusion" class="workspace-tab">
           <div class="page-header">
-            <h1 class="page-title">FF-Fusion Output</h1>
-            <p class="page-desc">Knowledge-distilled visible-infrared fusion preserving structural details under smoke.</p>
+            <h1 class="page-title" id="fusion-page-title">FF-Fusion Output</h1>
+            <p class="page-desc" id="fusion-page-desc">Multimodal fusion combining Generated RGB and original Thermal IR imagery under smoke.</p>
           </div>
 
           <div class="single-output-workspace">
             <div class="output-panel">
               <div class="workspace-panel-header">
                 <span>FUSED VISUAL REPRESENTATION</span>
-                <div class="toggle-group">
-                  <button class="toggle-btn active" data-modality="fused">Fused</button>
-                  <button class="toggle-btn" data-modality="rgb">RGB</button>
-                  <button class="toggle-btn" data-modality="thermal">Thermal</button>
-                </div>
               </div>
               <div class="image-container-large">
-                <span id="fusion-placeholder" class="placeholder-text">No Analysis Result Available</span>
+                <span id="fusion-placeholder" class="placeholder-text">No Fusion Result Available</span>
                 <img id="view-fusion-large" class="workspace-img hidden" alt="FF-Fusion Large View" />
               </div>
               <div class="metadata-bar">
                 <div>Model: <span class="text-mono" id="fusion-meta-model">FF-Fusion</span></div>
-                <div>Status: <span class="text-mono" id="fusion-meta-status">Ready</span></div>
-                <div>Dimensions: <span class="text-mono">640 &times; 512</span></div>
+                <div>Status: <span class="text-mono" id="fusion-meta-status">Idle</span></div>
+                <div>Input Modalities: <span class="text-mono">Generated RGB + Original Thermal</span></div>
               </div>
             </div>
           </div>
@@ -223,8 +209,8 @@
         <!-- TAB 4: DEPTH -->
         <section id="tab-depth" class="workspace-tab">
           <div class="page-header">
-            <h1 class="page-title">Depth Anything V2</h1>
-            <p class="page-desc">Dense relative depth map estimation from smoke-resilient fused imagery.</p>
+            <h1 class="page-title">Depth Anything V2 Map</h1>
+            <p class="page-desc">Dense relative depth map estimation derived from smoke-resilient fused imagery.</p>
           </div>
 
           <div class="single-output-workspace">
@@ -240,30 +226,28 @@
               <div class="metadata-bar">
                 <div>Model: <span class="text-mono">Depth Anything V2 Small</span></div>
                 <div>Status: <span class="text-mono" id="depth-meta-status">Valid</span></div>
-                <div>Min: <span class="text-mono" id="depth-meta-min">--</span></div>
-                <div>Max: <span class="text-mono" id="depth-meta-max">--</span></div>
+                <div>Min Depth: <span class="text-mono" id="depth-meta-min">--</span></div>
+                <div>Max Depth: <span class="text-mono" id="depth-meta-max">--</span></div>
                 <div>Std Dev: <span class="text-mono" id="depth-meta-std">--</span></div>
               </div>
             </div>
           </div>
         </section>
 
-        <!-- TAB 5: 3D SCENE (DOMINANT VIEW) -->
+        <!-- TAB 5: 3D SCENE -->
         <section id="tab-scene" class="workspace-tab">
           <div class="scene-workspace">
             
-            <!-- 3D Header Toolbar -->
             <div class="scene-header">
               <div class="scene-title-group">
-                <span class="scene-title">3D Relative-Depth View</span>
-                <span class="scene-sub text-muted">Unquantized Float32 Depth Surface</span>
+                <span class="scene-title">3D Relative-Depth Viewport</span>
+                <span class="scene-sub text-muted">Float32 Unquantized Depth Projection</span>
               </div>
               <div class="scene-actions">
-                <button id="btn-scene-reset-cam" class="btn btn-secondary btn-sm">Reset Camera</button>
+                <button id="btn-scene-reset-cam" class="btn btn-secondary btn-sm">Reset Camera View</button>
               </div>
             </div>
 
-            <!-- Main Three.js Viewport (65% Height Dominant) -->
             <div id="three-container" class="scene-viewport">
               <div id="canvas-overlay-loading" class="loading-overlay hidden">
                 <div class="spinner"></div>
@@ -271,23 +255,13 @@
               </div>
             </div>
 
-            <!-- Scene Control Toolbar -->
             <div class="scene-control-bar">
               <div class="control-item">
-                <label>Display:</label>
+                <label>Display Mode:</label>
                 <select id="select-mode" class="select-sm">
                   <option value="mesh" selected>Relative-Depth Surface</option>
                   <option value="pointcloud">3D Point Cloud</option>
                   <option value="both">Surface + Points</option>
-                </select>
-              </div>
-
-              <div class="control-item">
-                <label>Texture:</label>
-                <select id="select-texture" class="select-sm">
-                  <option value="rgb" selected>Fused Texture</option>
-                  <option value="depth">Depth Heatmap</option>
-                  <option value="thermal">Thermal Heatmap</option>
                 </select>
               </div>
 
@@ -312,62 +286,17 @@
               </div>
             </div>
 
-            <!-- Unobtrusive Technical Metadata Footer -->
             <div class="scene-meta-footer">
               <div>Vertices: <span id="meta-v-count" class="text-mono">--</span></div>
               <div>Triangles: <span id="meta-f-count" class="text-mono">--</span></div>
               <div>Depth Mode: <span class="text-mono">Relative</span></div>
-              <div>Camera: <span id="meta-cam-state" class="text-mono">Approximate</span></div>
-              <div>Smoke Est: <span id="meta-smoke-level" class="text-mono">Heuristic (Low)</span></div>
+              <div>Camera State: <span id="meta-cam-state" class="text-mono">Approximate</span></div>
             </div>
 
           </div>
         </section>
 
-        <!-- TAB 6: COMPARE -->
-        <section id="tab-compare" class="workspace-tab">
-          <div class="page-header">
-            <h1 class="page-title">Pipeline Variant Comparison</h1>
-            <p class="page-desc">Synchronized comparative evaluation across modality configurations under smoke.</p>
-          </div>
-
-          <div class="compare-grid">
-            <div class="compare-card">
-              <div class="compare-card-header">RGB Alone Pipeline</div>
-              <div class="compare-img-box">
-                <span class="placeholder-text">Awaiting Analysis</span>
-                <img id="comp-img-rgb" class="workspace-img hidden" alt="RGB Alone Depth" />
-              </div>
-              <div class="compare-card-footer text-mono">
-                <span>RGB &rarr; Depth Anything V2</span>
-              </div>
-            </div>
-
-            <div class="compare-card highlight-border">
-              <div class="compare-card-header">Authoritative Fusion Pipeline</div>
-              <div class="compare-img-box">
-                <span class="placeholder-text">Awaiting Analysis</span>
-                <img id="comp-img-fusion" class="workspace-img hidden" alt="FF-Fusion Depth" />
-              </div>
-              <div class="compare-card-footer text-mono">
-                <span>RGB + Thermal &rarr; FF-Fusion &rarr; Depth Anything V2</span>
-              </div>
-            </div>
-
-            <div class="compare-card">
-              <div class="compare-card-header">Generative Baseline (Experimental)</div>
-              <div class="compare-img-box">
-                <span class="placeholder-text">Generative API Disabled</span>
-                <img id="comp-img-gen" class="workspace-img hidden" alt="Generative Depth" />
-              </div>
-              <div class="compare-card-footer text-mono">
-                <span>Thermal &rarr; GPT-Image-2 &rarr; Depth (Visualization Only)</span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- TAB 7: HISTORY -->
+        <!-- TAB 6: HISTORY -->
         <section id="tab-history" class="workspace-tab">
           <div class="page-header">
             <h1 class="page-title">Run History</h1>
@@ -380,9 +309,9 @@
                 <tr>
                   <th>Timestamp</th>
                   <th>Run ID</th>
+                  <th>cGAN Model</th>
                   <th>Fusion Model</th>
                   <th>Depth Engine</th>
-                  <th>Depth Status</th>
                   <th>Execution Time</th>
                 </tr>
               </thead>
@@ -395,19 +324,18 @@
           </div>
         </section>
 
-        <!-- TAB 8: SYSTEM -->
+        <!-- TAB 7: SYSTEM SETTINGS -->
         <section id="tab-system" class="workspace-tab">
           <div class="page-header">
             <h1 class="page-title">System Settings</h1>
-            <p class="page-desc">Hardware configuration, model paths, and camera calibration parameters.</p>
+            <p class="page-desc">Model checkpoint statuses and camera calibration parameters.</p>
           </div>
 
           <div class="settings-grid">
             
-            <!-- Camera Intrinsics Settings -->
             <div class="panel">
               <div class="panel-header">Camera Calibration Intrinsics</div>
-              <p class="text-xs text-muted mb-3">Supply pinhole camera parameters ($f_x, f_y, c_x, c_y$) for calibrated projection. If unsupplied, approximate normalized FOV is assumed.</p>
+              <p class="text-xs text-muted mb-3">Supply pinhole camera parameters (fx, fy, cx, cy) for calibrated projection. If unsupplied, approximate normalized FOV is assumed.</p>
               
               <div class="intrinsics-form-grid">
                 <div class="form-group">
@@ -434,22 +362,22 @@
               </div>
             </div>
 
-            <!-- Generative API Settings -->
             <div class="panel">
-              <div class="panel-header">Generative AI Baseline Settings</div>
-              <p class="text-xs text-muted mb-3">Configure OpenAI GPT-Image-2 API client for synthetic RGB comparison baselines.</p>
-
-              <div class="form-group">
-                <label>Privacy & Data Transfer Notice</label>
-                <div class="privacy-box text-xs text-muted">
-                  Enabling the Generative RGB comparison branch sends the uploaded thermal image to the configured external provider (OpenAI API) for image-to-image translation. This image is not used for authoritative 3D geometry.
-                </div>
-              </div>
-
-              <div class="form-group mt-2">
-                <label for="sys-openai-key">OpenAI API Key (Set in .env)</label>
-                <input type="password" id="sys-openai-key" value="••••••••••••••••" disabled class="input-text" />
-              </div>
+              <div class="panel-header">Model Checkpoints Status</div>
+              <table class="tech-table" id="table-model-statuses">
+                <tr>
+                  <td>cGAN (generator_best.pth)</td>
+                  <td class="text-mono" id="status-cell-cgan">Checking...</td>
+                </tr>
+                <tr>
+                  <td>FF-Fusion (ff_fusion.pth)</td>
+                  <td class="text-mono" id="status-cell-fusion">Checking...</td>
+                </tr>
+                <tr>
+                  <td>Depth Anything V2 (depth_anything_v2.pth)</td>
+                  <td class="text-mono" id="status-cell-depth">Checking...</td>
+                </tr>
+              </table>
             </div>
 
           </div>

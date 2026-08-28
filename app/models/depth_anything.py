@@ -20,7 +20,7 @@ class DepthAnythingV2Model:
         self,
         encoder: str = "vits",
         mode: str = "relative",
-        checkpoint_path: str = "models/depth_anything_v2_vits.pth",
+        checkpoint_path: str = "models/checkpoints/depth_anything_v2.pth",
         device: str = "cuda",
         fp16: bool = True
     ):

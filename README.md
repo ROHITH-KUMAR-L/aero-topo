@@ -1,95 +1,135 @@
-# Aero-Topo — Smoke-Resilient UAV Multimodal Perception & 3D Topography System
+# Aero-Topo — Smoke-Resilient Thermal Perception & 3D Topography Workstation
 
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-orange.svg)](https://pytorch.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-green.svg)](https://fastapi.tiangolo.com/)
 [![Three.js](https://img.shields.io/badge/Three.js-r160-black.svg)](https://threejs.org/)
 
-**Aero-Topo** is an autonomous UAV wildfire perception system designed to provide dense relative 3D scene geometry and topographical visual representations under severe smoke occlusion, low illumination, and complex forest fire conditions.
+**Aero-Topo** is a wildfire perception and 3D reconstruction system designed for environments where visible-spectrum imagery is occluded by dense smoke, low illumination, or active fire conditions.
+
+The primary input to the system is a **Thermal / Infrared (IR) image**. The user is **NOT** required to upload an RGB image. The application generates a visible-spectrum representation from the thermal image using a pretrained conditional GAN (cGAN), fuses it with the original thermal image using FF-Fusion, estimates relative depth using Depth Anything V2, and projects a 3D terrain surface for interactive browser visualization.
 
 ---
 
-## Architecture Overview
+## Authoritative System Architecture
 
 ```text
-┌────────────────────────┐      ┌────────────────────────┐
-│     Visible RGB        │      │   Thermal IR (TIFF)    │
-└───────────┬────────────┘      └───────────┬────────────┘
-            │                               │
-            └───────────────┬───────────────┘
-                            │
-                  [ Spatial Alignment ]
-                            │
-                            ▼
-                    ┌──────────────┐
-                    │  FF-Fusion   │
-                    └───────┬──────┘
-                            │ (Smoke-Resilient Fused Visual Representation)
-                            ▼
-                 ┌────────────────────┐
-                 │ Depth Anything V2  │
-                 └──────────┬─────────┘
-                            │ (Dense Relative Depth Map)
-                            ▼
-              [ Pinhole Camera Projection ]
-            X = (u - cx)*Z/fx , Y = (v - cy)*Z/fy
-                            │
-            ┌───────────────┴───────────────┐
-            ▼                               ▼
-    ┌──────────────┐                ┌──────────────┐
-    │ 3D Pointcloud│                │ Terrain Mesh │
-    │   (.PLY)     │                │ (.OBJ/.GLB)  │
-    └───────┬──────┘                └───────┬──────┘
-            │                               │
-            └───────────────┬───────────────┘
-                            │
-                            ▼
-                 ┌────────────────────┐
-                 │ Three.js Dashboard │
-                 └────────────────────┘
+               THERMAL / IR IMAGE (8-bit or 16-bit)
+                                │
+                                ▼
+                      Thermal Preprocessing
+                   1-Channel Tensor [1, 256, 256]
+                                │
+                                ▼
+                      Pretrained Pix2Pix cGAN
+                     UNetGenerator (FLAME 3)
+                                │
+                                ▼
+                          GENERATED RGB
+                       Tensor [3, 256, 256]
+                                │
+                 ┌──────────────┴──────────────┐
+                 │                             │
+                 ▼                             ▼
+          Generated RGB                 Original Thermal
+                 │                             │
+                 └──────────────┬──────────────┘
+                                ▼
+                            FF-Fusion
+                                │ (Fused Multimodal Representation)
+                                ▼
+                        Depth Anything V2
+                                │ (Dense Relative Depth Map)
+                                ▼
+                    [ Camera Pinhole Projection ]
+                  X = (u - cx)*Z/fx , Y = (v - cy)*Z/fy
+                                │
+                ┌───────────────┴───────────────┐
+                ▼                               ▼
+        3D Pointcloud (.PLY)             Terrain Mesh (.OBJ / .GLB)
+                │                               │
+                └───────────────┬───────────────┘
+                                │
+                                ▼
+                     Three.js 3D Viewport
 ```
 
 ---
 
-## Core Technical Concepts
+## cGAN Model Synchronization (FLAME 3)
 
-### 1. Project Motivation
-Standard RGB cameras provide high visual detail but suffer extreme degradation in wildfire environments due to dense smoke haze, scattering, and low contrast. Thermal Infrared (LWIR/MWIR) sensors penetrate smoke and expose critical ground structures and heat sources. Aero-Topo fuses both modalities to produce a geometrically coherent 3D scene representation.
+The thermal-to-visible translation model is trained externally on the **FLAME 3** dataset using a Pix2Pix conditional GAN with a **1-channel input (`in_channels=1`) and 3-channel output (`out_channels=3`) UNetGenerator** architecture:
 
-### 2. Primary Model — FF-Fusion
-FF-Fusion (*Knowledge-Distilled Visible-Infrared Image Fusion for Forest Fire Monitoring*) extracts high-frequency structural details from visible RGB and combines them with thermal radiation distributions under heavy smoke without color distortion.
+```python
+# 1-channel thermal input normalized to [-1, 1]
+# Output Tanh activation in [-1, 1] mapped to RGB [0, 255]
+UNetGenerator(in_channels=1, out_channels=3)
+```
 
-### 3. Depth Model — Depth Anything V2
-We utilize **Depth Anything V2 Small** (`vits`, ~24.8M parameters) as our foundation monocular relative depth engine, optimized for edge/RTX 3050 GPUs.
-
-### 4. Relative vs Metric Depth
-Standard Depth Anything V2 outputs **relative depth** ($Z \in [0, 1]$ or arbitrary relative scale), not calibrated physical meters. The UI explicitly labels depth as **Relative Depth**.
-
-### 5. 3D Projection Equations
-Given depth $Z(u,v)$ and camera parameters $(f_x, f_y, c_x, c_y)$:
-$$X = \frac{(u - c_x) \cdot Z}{f_x}$$
-$$Y = \frac{(v - c_y) \cdot Z}{f_y}$$
-$$Z = Z$$
+- **Pretrained Checkpoint:** `generator_best.pth`
+- **Model Distribution:** Checkpoints are hosted on Hugging Face and downloaded automatically on application startup.
+- **Inference-Only:** The production application performs inference only. Training is executed externally.
+- **Discriminator:** The discriminator network is training-only and is omitted from production deployment.
 
 ---
 
-## Setup & Running
+## Model Checkpoint Management
 
-### Installation
+Missing pretrained model checkpoints (`generator_best.pth`, `ff_fusion.pth`, `depth_anything_v2.pth`) are automatically downloaded into `models/checkpoints/` from Hugging Face:
+
+```bash
+python scripts/download_models.py
+```
+
+### Centralized Hugging Face Configuration
+
+Model repository locations are configured in `app/config/config.yaml`:
+
+```yaml
+models:
+  cgan:
+    enabled: true
+    checkpoint_path: "models/checkpoints/generator_best.pth"
+    huggingface:
+      repo_id: "YOUR_HF_USERNAME/YOUR_HF_REPOSITORY"
+      filename: "generator_best.pth"
+```
+
+For private repositories, specify `HF_TOKEN` in `.env`.
+
+---
+
+## Relative Depth & 3D Reconstruction
+
+1. **Depth Anything V2 Small:** Derives dense relative depth ($Z_{rel}$) from the smoke-resilient fused image.
+2. **Relative Scale:** Depth outputs represent scale-ambiguous relative depth.
+3. **Pinhole Projection:**
+   $$X = \frac{(u - c_x) \cdot Z_{rel}}{f_x}, \quad Y = \frac{(v - c_y) \cdot Z_{rel}}{f_y}$$
+4. **Three.js Viewer:** Interactive 3D visualization supporting orbit, pan, zoom, point cloud mode, surface mesh mode, wireframe, height exaggeration, and GLB/OBJ export.
+
+---
+
+## Installation & Running
+
+### 1. Installation
 ```bash
 git clone https://github.com/ROHITH-KUMAR-L/aero-topo.git
 cd aero-topo
 pip install -r requirements.txt
 ```
 
-### Environment Configuration
+### 2. Environment Setup
 Copy `.env.example` to `.env`:
 ```bash
 cp .env.example .env
 ```
-Optionally add `OPENAI_API_KEY` if testing the optional generative comparison branch.
 
-### One-Command Start
+### 3. Model Downloader
+```bash
+python scripts/download_models.py
+```
+
+### 4. One-Command Application Start
 ```bash
 python run.py
 ```
@@ -97,17 +137,22 @@ Open your browser at: `http://127.0.0.1:8000`
 
 ---
 
-## Evaluation & Ablation Studies
+## Development & Testing
 
-Run quantitative metric evaluation:
+Run automated tests:
 ```bash
-python scripts/evaluate.py path/to/rgb.png path/to/fused.png
+python -m pytest tests/
+```
+
+Run quantitative evaluation comparing Generated RGB to Reference RGB:
+```bash
+python scripts/evaluate.py path/to/generated_rgb.png path/to/reference_rgb.png
 ```
 
 ---
 
 ## License & Attribution
 
-- **FF-Fusion**: Official research framework.
+- **FF-Fusion**: Multimodal Image Fusion framework.
 - **Depth Anything V2**: Apache-2.0 License.
 - **Aero-Topo**: MIT License.
